@@ -2,6 +2,8 @@
 
 A ragdoll implementation adapted for **Chrono v2.2.0+**.
 
+> Built for [Chrono — Drop-in Custom Physics Replication Library](https://devforum.roblox.com/t/chrono-drop-in-custom-physics-replication-library/3873294)
+
 Supports both **R6** and **R15**, with additional fixes for ragdoll stability, death handling, recovery, and Chrono replication.
 
 > [!IMPORTANT]
