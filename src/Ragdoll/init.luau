@@ -33,50 +33,16 @@
 	timed recovery will not restore a character whose Humanoid.Health <= 0.
 ]]
 
-local Chrono = require(script.Parent.Chrono)
-local Ragdoll = require(script.ragdoll)
-
-local ServerRagdoll = {}
-
-local NORMAL_CONFIG = "PLAYER"
-local RAGDOLL_CONFIG = "PLAYER_RAGDOLL"
-
-local NORMAL_INTERPOLATION = "CFRAME"
-local RAGDOLL_INTERPOLATION = "ALIGN"
+local Chrono = require(Path.To.Chrono)
+local Ragdoll = require(script.ragdoll);
 
 local R6_STAND_HEIGHT = 3
 local RECOVERY_CAST_OFFSET = Vector3.new(0, 4, 0)
 local RECOVERY_CAST_DIRECTION = Vector3.new(0, -16, 0)
 local DEFAULT_LOOK_DIRECTION = Vector3.new(0, 0, -1)
 
-local ragdollTokens = setmetatable({}, { __mode = "k" })
-
--- PLAYER_RAGDOLL should normally be registered by the Chrono bootstrap before
--- Chrono.Start(). This registration is only a fallback.
-local success, err = pcall(function()
-	Chrono.Config.RegisterEntityType(RAGDOLL_CONFIG, {
-		BUFFER = 0,
-		TICK_RATE = 1 / 20,
-		HALF_TICK_DISTANCE = math.huge,
-		FULL_ROTATION = true,
-		MODEL_REPLICATION_MODE = "NATIVE",
-		ASSEMBLY_ROOT_PART_CHECK = false,
-	})
-end)
-
-if not success then
-	warn(
-		"[Ragdoll] Failed to register PLAYER_RAGDOLL Chrono entity type: "
-			.. tostring(err)
-			.. "\nMove Chrono.Config.RegisterEntityType() before Chrono.Start()."
-	)
-end
-
 local function getHolder(player: Player)
 	local character = player.Character
-	if not character then
-		return nil
-	end
 
 	local holder = Chrono.Holder.GetEntityFromPlayer(player)
 	if not holder or holder.model ~= character then
@@ -84,27 +50,6 @@ local function getHolder(player: Player)
 	end
 
 	return holder
-end
-
-local function setChronoConfig(player: Player, configName: string)
-	local holder = getHolder(player)
-	if holder then
-		Chrono.Entity.SetConfig(holder, configName)
-	end
-end
-
-local function setInterpolationMode(player: Player, mode: "ALIGN" | "CFRAME")
-	local holder = getHolder(player)
-	if holder then
-		Chrono.Entity.SetInterpolationMode(holder, mode)
-	end
-end
-
-local function invalidateTimer(player: Player)
-	local token = (ragdollTokens[player] or 0) + 1
-	ragdollTokens[player] = token
-
-	return token
 end
 
 local function clearCharacterMomentum(character: Model)
@@ -130,19 +75,18 @@ local function getRecoveryCFrame(character: Model, humanoid: Humanoid, root: Bas
 	raycastParams.FilterDescendantsInstances = { character }
 	raycastParams.RespectCanCollide = true
 
-	local ground = workspace:Raycast(
-		root.Position + RECOVERY_CAST_OFFSET,
-		RECOVERY_CAST_DIRECTION,
-		raycastParams
-	)
+	local ground = workspace:Raycast( root.Position + RECOVERY_CAST_OFFSET, RECOVERY_CAST_DIRECTION, raycastParams)
 
 	if not ground then
 		return nil
 	end
 
-	local standHeight = if humanoid.RigType == Enum.HumanoidRigType.R6
-		then R6_STAND_HEIGHT
-		else humanoid.HipHeight + root.Size.Y * 0.5
+	local standHeight;
+	if humanoid.RigType == Enum.HumanoidRigType.R6 then 
+		standHeight = R6_STAND_HEIGHT
+	else 
+		standHeight = humanoid.HipHeight + root.Size.Y * 0.5
+	end
 
 	local position = Vector3.new(
 		root.Position.X,
@@ -167,25 +111,15 @@ end
 
 local function stabilizeRoot(player: Player)
 	local character = player.Character
-	if not character then
-		return
-	end
 
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart")
-	if not humanoid or not root or not root:IsA("BasePart") or not root.Parent then
-		return
-	end
 
 	-- R15 uses its real body for ragdoll physics, so momentum is cleared from the
 	-- entire character before restoring normal joints. This is safe for R6 too.
 	clearCharacterMomentum(character)
 
 	local recoveryCFrame = getRecoveryCFrame(character, humanoid, root)
-	if not recoveryCFrame then
-		return
-	end
-
 	local holder = getHolder(player)
 	if holder then
 		pcall(Chrono.Entity.SetCFrame, holder, recoveryCFrame)
@@ -196,38 +130,28 @@ end
 
 local function finishRagdoll(player: Player)
 	local character = player.Character
-	if not character then
-		return
-	end
-
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
 
+	local holder = getHolder(player)
 	stabilizeRoot(player)
+
 	Ragdoll.SetRagdollDisabled(character)
-	setInterpolationMode(player, NORMAL_INTERPOLATION)
+	
+	Chrono.Entity.SetInterpolationMode(holder, "CFRAME")
+
 	humanoid.AutoRotate = true
-	setChronoConfig(player, NORMAL_CONFIG)
+	
+	Chrono.Entity.setChronoConfig(holder, "PLAYER")
 end
 
-function ServerRagdoll:StartRagdoll(player: Player, duration: number?)
+local function StartRagdoll(player: Player, duration: number?)
 	local character = player.Character
-	if not character then
-		return
-	end
-
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart")
-	if not humanoid or not root or not root:IsA("BasePart") then
-		return
-	end
 
-	local token = invalidateTimer(player)
-
-	setChronoConfig(player, RAGDOLL_CONFIG)
-	setInterpolationMode(player, RAGDOLL_INTERPOLATION)
+	local holder = getHolder(player)
+	Chrono.Entity.setChronoConfig(holder, "PLAYER_RAGDOLL")
+	Chrono.Entity.SetInterpolationMode(holder, "ALIGN")
 
 	humanoid.AutoRotate = false
 	root.AssemblyAngularVelocity = Vector3.zero
@@ -239,10 +163,6 @@ function ServerRagdoll:StartRagdoll(player: Player, duration: number?)
 	end
 
 	task.delay(duration, function()
-		if ragdollTokens[player] ~= token then
-			return
-		end
-
 		local currentCharacter = player.Character
 		local currentHumanoid = currentCharacter and currentCharacter:FindFirstChildOfClass("Humanoid")
 
@@ -256,9 +176,7 @@ function ServerRagdoll:StartRagdoll(player: Player, duration: number?)
 	end)
 end
 
-function ServerRagdoll:StopRagdoll(player: Player)
-	invalidateTimer(player)
-
+local function StopRagdoll(player: Player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if not humanoid or humanoid.Health <= 0 then
@@ -268,4 +186,7 @@ function ServerRagdoll:StopRagdoll(player: Player)
 	finishRagdoll(player)
 end
 
-return ServerRagdoll
+return {
+	StartRagdoll = StartRagdoll,
+	StopRagdoll = StopRagdoll,
+}

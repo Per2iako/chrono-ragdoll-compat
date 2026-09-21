@@ -23,175 +23,70 @@ Supports both **R6** and **R15**, with additional fixes for ragdoll stability, d
 
 ## Requirements
 
-* Roblox
 * Chrono v2.2.0+
-* Server and client initialization
 
-`PLAYER_RAGDOLL` should be registered before:
+## Installation Guide
 
+> Ragdoll/init.luau
 ```lua
-Chrono.Start(...)
+local Chrono = require(Path.To.Chrono)
 ```
 
-Example:
-
+> LocalScript
 ```lua
+--// LocalScript
+
+local Chrono = require(Path.To.Chrono)
+local Ragdoll = require(script.Parent.Ragdoll)
+
+-- PLAYER_RAGDOLL should normally be registered by the Chrono bootstrap before
+-- Chrono.Start(). This registration is only a fallback.
 Chrono.Config.RegisterEntityType("PLAYER_RAGDOLL", {
-	BUFFER = 0,
-	TICK_RATE = 1 / 20,
-	HALF_TICK_DISTANCE = math.huge,
-	FULL_ROTATION = true,
-	MODEL_REPLICATION_MODE = "NATIVE",
-	ASSEMBLY_ROOT_PART_CHECK = false,
+    BUFFER = 0,
+    TICK_RATE = 1 / 20,
+    HALF_TICK_DISTANCE = math.huge,
+    FULL_ROTATION = true,
+    MODEL_REPLICATION_MODE = "NATIVE",
+    ASSEMBLY_ROOT_PART_CHECK = false,
 })
+
+Chrono.Start()
 ```
 
-The module also attempts fallback registration if the entity type has not already been registered.
-
-## Installation
-
-Example structure:
-
-```text
-Ragdoll/
-├── init.luau
-├── ragdoll.luau
-└── rigtypes.luau
-```
-
-Set the Chrono path inside `init.luau`:
-
+> Script 
 ```lua
-local Chrono = require(path.To.Chrono)
-```
+--// Script
 
-Then require the module on both the server and client.
+local Chrono = require(Path.To.Chrono)
+local Ragdoll = require(script.Parent.Ragdoll)
 
-## Usage
+-- PLAYER_RAGDOLL should normally be registered by the Chrono bootstrap before
+-- Chrono.Start(). This registration is only a fallback.
+Chrono.Config.RegisterEntityType("PLAYER_RAGDOLL", {
+    BUFFER = 0,
+    TICK_RATE = 1 / 20,
+    HALF_TICK_DISTANCE = math.huge,
+    FULL_ROTATION = true,
+    MODEL_REPLICATION_MODE = "NATIVE",
+    ASSEMBLY_ROOT_PART_CHECK = false,
+})
 
-```lua
-local Ragdoll = require(path.To.Ragdoll)
 
+Chrono.Start()
+
+--// no time limit ragdoll
 Ragdoll:StartRagdoll(player)
+
+--// set timeout for ragdoll
 Ragdoll:StartRagdoll(player, 5)
 
+--// stop ragdoll
 Ragdoll:StopRagdoll(player)
 ```
-
-Timed ragdolls automatically recover unless the character has died.
-
-`StopRagdoll()` intentionally does not recover dead characters.
-
-## Rig Support
-
-### R6
-
-R6 uses a custom invisible physics skeleton driven by `BallSocketConstraint`.
-
-The visible character follows the simulated skeleton while collision safeguards prevent the root, visible body, and skeleton from pushing against each other.
-
-This helps prevent:
-
-* Sliding
-* Jitter
-* Self-collision impulses
-* Character launching
-
-### R15
-
-R15 supports Roblox's **Avatar Joint Upgrade**.
-
-The implementation uses the character's existing:
-
-* `AnimationConstraint`
-* `BallSocketConstraint`
-
-Relevant animation constraints are disabled during ragdoll so the existing physics constraints can simulate the body.
-
-Their original states are restored during recovery.
-
-Legacy R15 rigs using `Motor6D` may fall back to the custom skeleton implementation.
-
-## Chrono Integration
-
-While ragdolled:
-
-```text
-Entity Config       = PLAYER_RAGDOLL
-Interpolation Mode  = ALIGN
-```
-
-After recovery:
-
-```text
-Entity Config       = PLAYER
-Interpolation Mode  = CFRAME
-```
-
-`ALIGN` is used during ragdoll so normal CFrame replication does not fight against the physics simulation.
-
-Before returning to `CFRAME`, the character is stabilized and synchronized with Chrono.
-
-The Holder is resolved using:
-
-```lua
-Chrono.Holder.GetEntityFromPlayer(player)
-```
-
-and is only accepted when:
-
-```lua
-holder.model == player.Character
-```
-
-This prevents Chrono operations from affecting an outdated character during respawn.
-
-## Death Behaviour
-
-Dead characters intentionally remain ragdolled.
-
-The module does not restore normal joints, `PLAYER` configuration, or `CFRAME` interpolation when:
-
-```lua
-humanoid.Health <= 0
-```
-
-Restoring them while the corpse is still being simulated can cause:
-
-* Launch impulses
-* Jitter
-* Position corrections
-* Constraint instability
-* Unwanted movement
-
-## Character Recovery
-
-Before leaving ragdoll, `stabilizeRoot()` prepares the character for normal movement again.
-
-It:
-
-1. Clears unwanted angular velocity.
-2. Reduces remaining vertical momentum.
-3. Finds the ground below the character.
-4. Calculates a valid standing position.
-5. Preserves horizontal facing direction.
-6. Synchronizes the recovery CFrame with Chrono.
-7. Moves the character to the same position before restoring normal replication.
-
-Without this step, leftover ragdoll momentum and Chrono position correction can happen at the same time, causing the character to launch, spin, slide, or recover in an invalid position.
-
-## Timer Safety
-
-Timed ragdolls use per-player tokens.
-
-Starting, restarting, or stopping ragdoll invalidates previous timers.
-
-This prevents an old delayed callback from unexpectedly recovering a newer ragdoll state.
 
 ## Collision Handling
 
 No custom Roblox `CollisionGroup` setup is required.
-
 The module instead uses:
 
 * `NoCollisionConstraint`
