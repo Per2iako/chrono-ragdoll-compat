@@ -9,18 +9,6 @@ Supports both **R6** and **R15**, with additional fixes for ragdoll stability, d
 > [!IMPORTANT]
 > This module must be required on both the **server** and **client**.
 
-## Features
-
-* R6 ragdoll support
-* R15 / Avatar Joint Upgrade support
-* Chrono replication integration
-* Timed ragdolls
-* Safe death handling
-* Root stabilization before recovery
-* Protection against launch, jitter, and sliding
-* No custom `CollisionGroup` dependency
-* Legacy R15 fallback support
-
 ## Requirements
 
 * Chrono v2.2.0+
@@ -75,13 +63,13 @@ Chrono.Config.RegisterEntityType("PLAYER_RAGDOLL", {
 Chrono.Start()
 
 --// no time limit ragdoll
-Ragdoll:StartRagdoll(player)
+Ragdoll.StartRagdoll(player)
 
 --// set timeout for ragdoll
-Ragdoll:StartRagdoll(player, 5)
+Ragdoll.StartRagdoll(player, 5)
 
 --// stop ragdoll
-Ragdoll:StopRagdoll(player)
+Ragdoll.StopRagdoll(player)
 ```
 
 ## Collision Handling
