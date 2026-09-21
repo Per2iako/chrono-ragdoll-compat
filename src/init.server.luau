@@ -18,10 +18,10 @@ Chrono.Config.RegisterEntityType("PLAYER_RAGDOLL", {
 Chrono.Start()
 
 --// no time Limit Ragdoll
-Ragdoll:StartRagdoll(player)
+Ragdoll.StartRagdoll(player)
 
 --// set timeout for ragdoll
-Ragdoll:StartRagdoll(player, 5)
+Ragdoll.StartRagdoll(player, 5)
 
 --// stop ragdoll
-Ragdoll:StopRagdoll(player)
+Ragdoll.StopRagdoll(player)

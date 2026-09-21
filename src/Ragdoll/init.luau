@@ -33,7 +33,7 @@
 	timed recovery will not restore a character whose Humanoid.Health <= 0.
 ]]
 
-local Chrono = require(Path.To.Chrono)
+local Chrono = require(script.Parent.Chrono)
 local Ragdoll = require(script.ragdoll);
 
 local R6_STAND_HEIGHT = 3
@@ -112,7 +112,7 @@ end
 local function stabilizeRoot(player: Player)
 	local character = player.Character
 
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local humanoid = character:FindFirstChild("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart")
 
 	-- R15 uses its real body for ragdoll physics, so momentum is cleared from the
@@ -130,27 +130,27 @@ end
 
 local function finishRagdoll(player: Player)
 	local character = player.Character
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local humanoid = character:FindFirstChild("Humanoid")
 
 	local holder = getHolder(player)
 	stabilizeRoot(player)
 
 	Ragdoll.SetRagdollDisabled(character)
-	
+
 	Chrono.Entity.SetInterpolationMode(holder, "CFRAME")
 
 	humanoid.AutoRotate = true
-	
-	Chrono.Entity.setChronoConfig(holder, "PLAYER")
+
+	Chrono.Entity.SetConfig(holder, "PLAYER")
 end
 
 local function StartRagdoll(player: Player, duration: number?)
 	local character = player.Character
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local humanoid = character:FindFirstChild("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart")
 
 	local holder = getHolder(player)
-	Chrono.Entity.setChronoConfig(holder, "PLAYER_RAGDOLL")
+	Chrono.Entity.SetConfig(holder, "PLAYER_RAGDOLL")
 	Chrono.Entity.SetInterpolationMode(holder, "ALIGN")
 
 	humanoid.AutoRotate = false
@@ -164,7 +164,7 @@ local function StartRagdoll(player: Player, duration: number?)
 
 	task.delay(duration, function()
 		local currentCharacter = player.Character
-		local currentHumanoid = currentCharacter and currentCharacter:FindFirstChildOfClass("Humanoid")
+		local currentHumanoid = currentCharacter and currentCharacter:FindFirstChild("Humanoid")
 
 		-- Dead characters intentionally remain in ragdoll/ALIGN. Restoring normal
 		-- joints and CF interpolation while dead can cause launch/jitter behaviour.
@@ -178,7 +178,7 @@ end
 
 local function StopRagdoll(player: Player)
 	local character = player.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local humanoid = character and character:FindFirstChild("Humanoid")
 	if not humanoid or humanoid.Health <= 0 then
 		return
 	end
