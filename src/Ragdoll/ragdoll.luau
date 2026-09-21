@@ -42,40 +42,6 @@ local function cloneBodyPart(part: BasePart): BasePart
 	return newPart
 end
 
-local function saveAndStopAnimations(animator: Animator)
-	local savedTracks = {}
-
-	for _, track in animator:GetPlayingAnimationTracks() do
-		if not track.Looped then
-			track:Stop()
-		end
-	end
-
-	local connection = animator.AnimationPlayed:Connect(function(track)
-		table.insert(savedTracks, {
-			track = track,
-			savedTime = time() - track.TimePosition,
-		})
-		track:Stop()
-	end)
-
-	return savedTracks, connection
-end
-
-local function restoreAnimations(savedTracks, connection: RBXScriptConnection?)
-	if connection then
-		connection:Disconnect()
-	end
-
-	for _, saved in savedTracks or {} do
-		local currentTrackTime = time() - saved.savedTime
-		if currentTrackTime < saved.track.Length then
-			saved.track:Play()
-			saved.track.TimePosition = currentTrackTime
-		end
-	end
-end
-
 local function setCameraForRagdoll(model: Model, enabled: boolean, previousSubject: Instance?)
 	if not isSelfRagdoll(model) then
 		return
@@ -118,7 +84,6 @@ local function enableLegacyRagdoll(model: Model, humanoid: Humanoid, hrp: BasePa
 
 	local selfRagdoll = isSelfRagdoll(model)
 	local camera = workspace.CurrentCamera
-	local savedTracks, animatorConnection = saveAndStopAnimations(animator)
 	local motorStates = {}
 
 	for _, motor in RigTypes.GetLegacyMotors(model, rigType) do
@@ -131,8 +96,6 @@ local function enableLegacyRagdoll(model: Model, humanoid: Humanoid, hrp: BasePa
 		rootCanCollide = hrp.CanCollide,
 		rootJointEnabled = rootJoint.Enabled,
 		cameraSubject = if selfRagdoll and camera then camera.CameraSubject else nil,
-		savedTracks = savedTracks,
-		animatorConnection = animatorConnection,
 		motorStates = motorStates,
 		requiresNeck = humanoid.RequiresNeck,
 		breakJointsOnDeath = humanoid.BreakJointsOnDeath,
@@ -315,7 +278,6 @@ local function enableAJURagdoll(model: Model, humanoid: Humanoid, hrp: BasePart,
 
 	local selfRagdoll = isSelfRagdoll(model)
 	local camera = workspace.CurrentCamera
-	local savedTracks, animatorConnection = saveAndStopAnimations(animator)
 
 	local runtimeFolder = Instance.new("Folder")
 	runtimeFolder.Name = RUNTIME_FOLDER_NAME
@@ -328,8 +290,6 @@ local function enableAJURagdoll(model: Model, humanoid: Humanoid, hrp: BasePart,
 	modelStates[model] = {
 		mode = "AJU",
 		cameraSubject = if selfRagdoll and camera then camera.CameraSubject else nil,
-		savedTracks = savedTracks,
-		animatorConnection = animatorConnection,
 	}
 
 	setCameraForRagdoll(model, true)
@@ -367,7 +327,6 @@ local function disableAJURagdoll(model: Model, humanoid: Humanoid, _hrp: BasePar
 		runtimeFolder:Destroy()
 	end
 
-	restoreAnimations(state.savedTracks, state.animatorConnection)
 	setCameraForRagdoll(model, false, state.cameraSubject)
 
 	if isSelfRagdoll(model) and humanoid.Health > 0 then
@@ -407,7 +366,6 @@ local function disableLegacyRagdoll(model: Model, humanoid: Humanoid, hrp: BaseP
 	humanoid.RequiresNeck = state.requiresNeck
 	humanoid.BreakJointsOnDeath = state.breakJointsOnDeath
 
-	restoreAnimations(state.savedTracks, state.animatorConnection)
 	setCameraForRagdoll(model, false, state.cameraSubject)
 
 	if isSelfRagdoll(model) and humanoid.Health > 0 then
