@@ -1,7 +1,6 @@
 local SHOULD_RAGDOLL_TAG = "KF_Should_Ragdoll"
 local SKELETON_FOLDER_NAME = "KF_RAGDOLL_SKELETON"
 local RUNTIME_FOLDER_NAME = "KF_RAGDOLL_RUNTIME"
-local SERVER_RUNTIME_FOLDER_NAME = "KF_RAGDOLL_SERVER_RUNTIME"
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -283,14 +282,31 @@ local function enableAJURagdoll(model: Model, humanoid: Humanoid, hrp: BasePart,
 	runtimeFolder.Name = RUNTIME_FOLDER_NAME
 	runtimeFolder.Parent = model
 
-	-- AJU ragdoll joints are toggled on the server through
-	-- AnimationConstraint.Enabled. Do not change IsKinematic/MaxForce/MaxTorque
-	-- here: changing IsKinematic at runtime can leave current AJU characters in
-	-- a broken prediction state after unragdoll.
-	modelStates[model] = {
+	-- Keep AJU simulation local, like the R6 skeleton. Chrono already owns and
+	-- replicates the character; the server only changes the ragdoll tag and
+	-- Humanoid state. Leave IsKinematic/MaxForce/MaxTorque alone because changing
+	-- IsKinematic at runtime can break prediction after recovery.
+	local state = {
 		mode = "AJU",
 		cameraSubject = if selfRagdoll and camera then camera.CameraSubject else nil,
+		ajuConstraintStates = {},
 	}
+	modelStates[model] = state
+
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("AnimationConstraint") and not isRootAnimationConstraint(descendant, hrp) then
+			state.ajuConstraintStates[descendant] = descendant.Enabled
+			descendant.Enabled = false
+		end
+	end
+
+	for _, objects in RigTypes.GetNativeNoCollisionPairs(model) do
+		local constraint = Instance.new("NoCollisionConstraint")
+		constraint.Name = "RagdollNoCollisionConstraint"
+		constraint.Part0 = objects.part1
+		constraint.Part1 = objects.part2
+		constraint.Parent = runtimeFolder
+	end
 
 	setCameraForRagdoll(model, true)
 	if selfRagdoll then
@@ -322,6 +338,12 @@ local function EnableRagdoll(model: Model)
 end
 
 local function disableAJURagdoll(model: Model, humanoid: Humanoid, _hrp: BasePart, state)
+	for constraint, wasEnabled in state.ajuConstraintStates do
+		if constraint.Parent then
+			constraint.Enabled = wasEnabled
+		end
+	end
+
 	local runtimeFolder = model:FindFirstChild(RUNTIME_FOLDER_NAME)
 	if runtimeFolder then
 		runtimeFolder:Destroy()
@@ -401,43 +423,16 @@ end
 
 local function SetRagdollEnabled(model: Model)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	local hrp = model:FindFirstChild("HumanoidRootPart")
 
 	if humanoid and not serverHumanoidStates[model] then
 		local state = {
 			requiresNeck = humanoid.RequiresNeck,
 			breakJointsOnDeath = humanoid.BreakJointsOnDeath,
-			ajuConstraintStates = {},
 		}
 
 		serverHumanoidStates[model] = state
 		humanoid.RequiresNeck = false
 		humanoid.BreakJointsOnDeath = false
-
-		-- R15 AJU already contains tuned BallSocketConstraints. The intended
-		-- ragdoll transition is to disable the non-root AnimationConstraints
-		-- and let those BallSockets simulate the character.
-		if humanoid.RigType == Enum.HumanoidRigType.R15 and hrp and hrp:IsA("BasePart") and hasAJU(model) then
-			for _, descendant in model:GetDescendants() do
-				if descendant:IsA("AnimationConstraint") and not isRootAnimationConstraint(descendant, hrp) then
-					state.ajuConstraintStates[descendant] = descendant.Enabled
-					descendant.Enabled = false
-				end
-			end
-
-			local runtimeFolder = Instance.new("Folder")
-			runtimeFolder.Name = SERVER_RUNTIME_FOLDER_NAME
-			runtimeFolder.Parent = model
-			state.runtimeFolder = runtimeFolder
-
-			for _, objects in RigTypes.GetNativeNoCollisionPairs(model) do
-				local constraint = Instance.new("NoCollisionConstraint")
-				constraint.Name = "RagdollNoCollisionConstraint"
-				constraint.Part0 = objects.part1
-				constraint.Part1 = objects.part2
-				constraint.Parent = runtimeFolder
-			end
-		end
 	end
 
 	model:AddTag(SHOULD_RAGDOLL_TAG)
@@ -453,29 +448,12 @@ local function SetRagdollDisabled(model: Model)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	local state = serverHumanoidStates[model]
 
-	if state then
-		for constraint, wasEnabled in state.ajuConstraintStates or {} do
-			if constraint.Parent then
-				constraint.Enabled = wasEnabled
-			end
-		end
-
-		if state.runtimeFolder and state.runtimeFolder.Parent then
-			state.runtimeFolder:Destroy()
-		else
-			local runtimeFolder = model:FindFirstChild(SERVER_RUNTIME_FOLDER_NAME)
-			if runtimeFolder then
-				runtimeFolder:Destroy()
-			end
-		end
+	if state and humanoid then
+		humanoid.RequiresNeck = state.requiresNeck
+		humanoid.BreakJointsOnDeath = state.breakJointsOnDeath
 	end
 
 	if humanoid then
-		if state then
-			humanoid.RequiresNeck = state.requiresNeck
-			humanoid.BreakJointsOnDeath = state.breakJointsOnDeath
-		end
-
 		if humanoid.Health > 0 then
 			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 		end

@@ -33,7 +33,7 @@
 	timed recovery will not restore a character whose Humanoid.Health <= 0.
 ]]
 
-local Chrono = require(script.Parent.Chrono)
+local Chrono = require(Path.To.Chrono)
 local Ragdoll = require(script.ragdoll);
 
 local R6_STAND_HEIGHT = 3
